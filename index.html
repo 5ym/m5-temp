@@ -74,18 +74,24 @@
 				<th>気圧</th>
 			</tr>
 		</thead>
-		<tbodyt>
+		<tbody>
 			<tr>
 				<td><i class="nix nix-0"></i><i class="nix nix-0"></i></td>
 				<td><i class="nix nix-0"></i><i class="nix nix-0"></i></td>
 				<td><i class="nix nix-0"></i><i class="nix nix-0"></i><i class="nix nix-0"></i><i class="nix nix-0"></i></td>
 			</tr>
-		</tbodyt>
+		</tbody>
 	</table>
 	<script>
 		window.addEventListener('load', function() {
+			// github.io ではM5実機からの送信が無いため、コミット済みの temp.txt を
+			// 繰り返し再生する表示サンプルとして動作する。
+			var DEMO = /\.github\.io$/.test(location.hostname) || /[?&]demo/.test(location.search);
 			var ctx = document.getElementById('myChart').getContext('2d');
 			var chart;
+			if (DEMO) {
+				$('body').prepend('<div style="padding:8px 12px;margin-bottom:8px;background:#fff3cd;border:1px solid #ffe69c;border-radius:4px;font-family:sans-serif;font-size:14px;">表示サンプル: M5Stack実機の代わりに記録済みデータを再生しています</div>');
+			}
 			$.ajaxSetup({ cache: false });
 			$.get("temp.txt").then(function(data) {
 				json = data.split('\n');
@@ -150,49 +156,65 @@
 					}
 				});
 			});
-			var jqxhr;
-			func = function() {
-				if(!jqxhr) {
-					jqxhr = $.get("temp.txt").then(function(data) {
-						s = data.split('\n');
-                        s = s[s.length - 2];
-						if(!s) {
-						    jqxhr = false;
-						    return;
-						}
-						e = $.parseJSON(s);
-						$(".nix").removeClass(function(index, className) {
-							return (className.match(/\bnix-\S+/g) || []).join(' ');
-						});
-						temp = Math.round(e.data.temp) + "";
-						humid = Math.round(e.data.humid) + "";
-						pressure = Math.round(e.data.pressure) + "";
-						$('td:nth-of-type(1)>i:first-of-type').addClass('nix-' + temp.substring(0, 1));
-						$('td:nth-of-type(1)>i:last-of-type').addClass('nix-' + temp.substring(1, 2));
-						$('td:nth-of-type(2)>i:first-of-type').addClass('nix-' + humid.substring(0, 1));
-						$('td:nth-of-type(2)>i:last-of-type').addClass('nix-' + humid.substring(1, 2));
-						$('td:nth-of-type(3)>i:nth-of-type(1)').addClass('nix-' + pressure.substring(0, 1));
-						$('td:nth-of-type(3)>i:nth-of-type(2)').addClass('nix-' + pressure.substring(1, 2));
-						$('td:nth-of-type(3)>i:nth-of-type(3)').addClass('nix-' + pressure.substring(2, 3));
-						$('td:nth-of-type(3)>i:nth-of-type(4)').addClass('nix-' + pressure.substring(3, 4));
-						if(chart.data.datasets[3].data.slice(-1)[0] !== e.time) {
-							chart.data.datasets[0].data.push(e.data.temp);
-							chart.data.datasets[0].data.shift();
-							chart.data.datasets[1].data.push(e.data.humid);
-							chart.data.datasets[1].data.shift();
-							chart.data.datasets[2].data.push(e.data.pressure);
-							chart.data.datasets[2].data.shift();
-							chart.data.datasets[3].data.push(e.time);
-							chart.data.datasets[3].data.shift();
-							chart.update();
-						}
-						jqxhr = false;
-					}, function(data) {
-						jqxhr = false;
-					});
-				}	
+			update = function(e) {
+				$(".nix").removeClass(function(index, className) {
+					return (className.match(/\bnix-\S+/g) || []).join(' ');
+				});
+				temp = Math.round(e.data.temp) + "";
+				humid = Math.round(e.data.humid) + "";
+				pressure = Math.round(e.data.pressure) + "";
+				$('td:nth-of-type(1)>i:first-of-type').addClass('nix-' + temp.substring(0, 1));
+				$('td:nth-of-type(1)>i:last-of-type').addClass('nix-' + temp.substring(1, 2));
+				$('td:nth-of-type(2)>i:first-of-type').addClass('nix-' + humid.substring(0, 1));
+				$('td:nth-of-type(2)>i:last-of-type').addClass('nix-' + humid.substring(1, 2));
+				$('td:nth-of-type(3)>i:nth-of-type(1)').addClass('nix-' + pressure.substring(0, 1));
+				$('td:nth-of-type(3)>i:nth-of-type(2)').addClass('nix-' + pressure.substring(1, 2));
+				$('td:nth-of-type(3)>i:nth-of-type(3)').addClass('nix-' + pressure.substring(2, 3));
+				$('td:nth-of-type(3)>i:nth-of-type(4)').addClass('nix-' + pressure.substring(3, 4));
+				if(chart && chart.data.datasets[3].data.slice(-1)[0] !== e.time) {
+					chart.data.datasets[0].data.push(e.data.temp);
+					chart.data.datasets[0].data.shift();
+					chart.data.datasets[1].data.push(e.data.humid);
+					chart.data.datasets[1].data.shift();
+					chart.data.datasets[2].data.push(e.data.pressure);
+					chart.data.datasets[2].data.shift();
+					chart.data.datasets[3].data.push(e.time);
+					chart.data.datasets[3].data.shift();
+					chart.update();
+				}
 			}
-			setInterval(func, 500);
+			if (DEMO) {
+				// 記録済みデータを1秒間隔でループ再生する。timeは再生ごとに
+				// 一意な値を振り直してグラフ更新の重複判定を通す。
+				$.get("temp.txt").then(function(data) {
+					var entries = data.split('\n').filter(function(l) { return l.trim(); }).map($.parseJSON);
+					var ptr = 0, tick = 0;
+					setInterval(function() {
+						var e = entries[ptr];
+						ptr = (ptr + 1) % entries.length;
+						update({ data: e.data, time: 'demo-' + (tick++) });
+					}, 1000);
+				});
+			} else {
+				var jqxhr;
+				func = function() {
+					if(!jqxhr) {
+						jqxhr = $.get("temp.txt").then(function(data) {
+							s = data.split('\n');
+							s = s[s.length - 2];
+							if(!s) {
+							    jqxhr = false;
+							    return;
+							}
+							update($.parseJSON(s));
+							jqxhr = false;
+						}, function(data) {
+							jqxhr = false;
+						});
+					}
+				}
+				setInterval(func, 500);
+			}
 		});
 	</script>
 </body>
